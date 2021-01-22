@@ -7,15 +7,21 @@ RTVSWEB_DOCKER_CONTAINER_NAME_TEMPLATE=${RTVSWEB_DOCKER_CONTAINER_NAME_TEMPLATE:
 RTVSWEB_DOCKER_PATH_TEMPLATE=${RTVSWEB_DOCKER_PATH_TEMPLATE:-"/etc/service/rtvs-"}
 NGINX_DOCKER_PATH_TEMPLATE=${NGINX_DOCKER_PATH_TEMPLATE:-"/etc/service/nginx-rtmp-"}
 NGINX_DOCKER_CONTAINER_NAME_TEMPLATE=${NGINX_DOCKER_CONTAINER_NAME_TEMPLATE:-"nginx-rtmp-"}
-DOCKER_IMAGE_NAME=${DOCKER_IMAGE_NAME:-"vanjoge/rtvs"}
+RTVSWEB_DOCKER_IMAGE_NAME=${RTVSWEB_DOCKER_IMAGE_NAME:-"vanjoge/rtvs"}
 
 MYSQL_DOCKER_CONTAINER_NAME=${MYSQL_DOCKER_CONTAINER_NAME:-"mysql5.7"}
 MYSQL_DOCKER_PATH=${MYSQL_DOCKER_PATH:-"/etc/mysql"}
 MYSQL_DOCKER_IP=${MYSQL_DOCKER_IP:-"172.29.108.241"}
+#传入有效值时不启动MYSQL实例
+#MYSQL_Server_IP
+#MYSQL_Server_PORT
 
 TSDB_DOCKER_CONTAINER_NAME=${TSDB_DOCKER_CONTAINER_NAME:-"influxdb"}
 TSDB_DOCKER_PATH=${TSDB_DOCKER_PATH:-"/etc/influxdb"}
 TSDB_DOCKER_IP=${TSDB_DOCKER_IP:-"172.29.108.242"}
+#传入有效值时不启动influxdb实例
+#TSDB_Server_IP
+#TSDB_Server_PORT
 
 WEBRTC_DOCKER_CONTAINER_NAME=${WEBRTC_DOCKER_CONTAINER_NAME:-"sfu-mediasoup"}
 WEBRTC_DOCKER_PATH=${WEBRTC_DOCKER_PATH:-"/etc/service/mediasoup"}
@@ -25,11 +31,20 @@ WEBRTC_RTP_URL=${WEBRTC_RTP_URL:-"rtp://172.29.108.240"}
 
 GRAFANA_DOCKER_CONTAINER_NAME=${GRAFANA_DOCKER_CONTAINER_NAME:-"grafana"}
 GRAFANA_DOCKER_PATH=${GRAFANA_DOCKER_PATH:-"/etc/grafana"}
+RUN_GRAFANA=${RUN_GRAFANA:-"true"}
 
 
 DOCKER_NETWORK=${DOCKER_NETWORK:-"cvnetwork"}
 DOCKER_NETWORK_IPS=${DOCKER_NETWORK_IPS:-"172.29.108"}
 DOCKER_GATEWAY_HOST=${DOCKER_GATEWAY_HOST:-"172.29.108.1"}
+
+
+#证书
+CV_PXF_PATH=${CV_PXF_PATH:-""}
+CV_PXF_PWD=${CV_PXF_PWD:-""}
+CV_PEM_PATH=${CV_PEM_PATH:-""}
+CV_PEMKEY_PATH=${CV_PEMKEY_PATH:-""}
+
 #外网IP
 
 #端口  
@@ -37,11 +52,14 @@ PORT_DEV_START=${PORT_DEV_START:-6001}
 PORT_DEV_END=${PORT_DEV_END:-65535}
 Webrtc_Port_Start=${Webrtc_Port_Start:-14001}
 Webrtc_Port_End=${Webrtc_Port_End:-14200}
+PORT_DEV_BINDPORT_START=${PORT_DEV_BINDPORT_START:-0}
+
+ClusterServer=${ClusterServer:-"http://172.29.108.254/Api"}
 
 if  [ ! -n "$GatewayBaseAPI" ] ;then
-	echo "GatewayBaseAPI 未设置，无需更改VideoControlUrl"
+    echo "GatewayBaseAPI 未设置，无需更改VideoControlUrl"
 else
-	VideoControlUrl=${GatewayBaseAPI}"VideoControl?Content="
+    VideoControlUrl=${GatewayBaseAPI}"VideoControl?Content="
 fi
 
 
@@ -52,7 +70,7 @@ DOCKER_RTVSWEB_CONTAINER_NAME=$RTVSWEB_DOCKER_CONTAINER_NAME_TEMPLATE"1"
 DOCKER_RTVSWEB_PATH=$RTVSWEB_DOCKER_PATH_TEMPLATE"1"
 DOCKER_NGINX_PATH=$NGINX_DOCKER_PATH_TEMPLATE"1"
 DOCKER_NGINX_CONTAINER_NAME=$NGINX_DOCKER_CONTAINER_NAME_TEMPLATE"1";
-DOCKER_RTVSWEB_VERSION="1.0.0"
+DOCKER_RTVSWEB_VERSION="1.2.12"
 
 DOCKER_RTVS_IP=11
 DOCKER_RTMP_IP=12
@@ -64,6 +82,7 @@ DOCKER_GOV_PORT=17004
 DOCKER_OCX_PORT=17005
 DOCKER_WS_PORT=17006
 DOCKER_FMP4_PORT=17007
+DOCKER_WSS_PORT=17008
 DOCKER_DEV_PORT1=17010
 DOCKER_DEV_PORT2=17011
 DOCKER_DEV_PORT3=17012
@@ -134,14 +153,50 @@ function init_system_files_path()
     if [[ ! -d $DOCKER_NGINX_PATH ]]; then
         mkdir $DOCKER_NGINX_PATH
     fi
-    # 复制nginx.conf文件
-    if [[ -f "./nginx/nginx.conf" ]]; then
-        echo "拷贝一份nginx.conf：cp ./nginx/nginx.conf $DOCKER_NGINX_PATH/nginx.conf"
-        cp ./nginx/nginx.conf $DOCKER_NGINX_PATH/nginx.conf
-    else
-        echo "缺少./nginx/nginx.conf文件...已退出安装!"
-        exit 1
+    
+    
+    # 复制nginx证书
+    if [[ ! -d $DOCKER_NGINX_PATH/cert ]]; then
+        mkdir $DOCKER_NGINX_PATH/cert
     fi
+    if [ -n "$CV_PEM_PATH" ]; then
+        if [[ -f "$CV_PEM_PATH" ]]; then
+            echo "拷贝证书文件： $CV_PEM_PATH $DOCKER_NGINX_PATH/cert/certificate.crt"
+            cp -f $CV_PEM_PATH $DOCKER_NGINX_PATH/cert/certificate.crt
+        else
+            echo "缺少$CV_PEM_PATH文件...已退出安装!"
+            exit 1
+        fi
+        
+        if [[ -f "$CV_PEMKEY_PATH" ]]; then
+            echo "拷贝证书私钥： $CV_PEMKEY_PATH $DOCKER_NGINX_PATH/cert/privkey.pem"
+            cp -f $CV_PEMKEY_PATH $DOCKER_NGINX_PATH/cert/privkey.pem
+        else
+            echo "缺少$CV_PEMKEY_PATH文件...已退出安装!"
+            exit 1
+        fi
+        # 复制nginx.conf文件
+        if [[ -f "./nginx/nginx.conf" ]]; then
+            echo "拷贝一份nginx.conf：cp ./nginx/nginx.conf $DOCKER_NGINX_PATH/nginx.conf"
+            cp ./nginx/nginx.conf $DOCKER_NGINX_PATH/nginx.conf
+        else
+            echo "缺少./nginx/nginx.conf文件...已退出安装!"
+            exit 1
+        fi
+    else
+        rm $DOCKER_NGINX_PATH/cert/certificate.crt
+        rm $DOCKER_NGINX_PATH/cert/privkey.pem
+        # 复制未加密nginx.conf文件
+        if [[ -f "./nginx/nginx_nowss.conf" ]]; then
+            echo "拷贝一份nginx_nowss.conf：cp ./nginx/nginx_nowss.conf $DOCKER_NGINX_PATH/nginx.conf"
+            cp ./nginx/nginx_nowss.conf $DOCKER_NGINX_PATH/nginx.conf
+        else
+            echo "缺少./nginx/nginx_nowss.conf文件...已退出安装!"
+            exit 1
+        fi
+    fi
+    
+    
     # 创建rtvs目录
     if [[ ! -d $DOCKER_RTVSWEB_PATH ]]; then
         mkdir $DOCKER_RTVSWEB_PATH
@@ -174,6 +229,18 @@ function init_system_files_path()
         exit 1
     fi
     
+    # 复制证书
+    if [ -n "$CV_PXF_PATH" ]; then
+        if [[ -f "$CV_PXF_PATH" ]]; then
+            echo "拷贝证书文件： $CV_PXF_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx"
+            cp -f $CV_PXF_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx
+        else
+            echo "缺少$CV_PXF_PATH文件...已退出安装!"
+            exit 1
+        fi
+    else
+        rm $DOCKER_RTVSWEB_PATH/certificate.pfx
+    fi
     
     # 复制集群管理文件
     if [[ ! -d $DOCKER_RTVSWEB_PATH/Config ]]; then
@@ -234,12 +301,27 @@ function docker_set_DOCKER_RTVSWEB_CONTAINER_NAME(){
 function docker_base_install()
 {
     init_system_files_path_base
-    #Mysql安装检查
-    docker_mysql_checkAndInstall
-    #influxdb安装检查
-    docker_influxdb_checkAndInstall
-    #grafana安装检查
-    docker_grafana_checkAndInstall
+    
+    if  [  -n "$MYSQL_Server_IP" ] ;then
+        MysqlConnectionString="Database=filecache;Data Source=$MYSQL_Server_IP;port=$MYSQL_Server_PORT;User Id=rtvsweb;Password=rtvs2018;charset=utf8;pooling=true"
+    else
+        #Mysql安装检查
+        docker_mysql_checkAndInstall
+        MysqlConnectionString="Database=filecache;Data Source=$MYSQL_DOCKER_IP;port=3306;User Id=rtvsweb;Password=rtvs2018;charset=utf8;pooling=true"
+    fi
+    
+    if  [  -n "$TSDB_Server_IP" ] ;then
+        InfluxdbBaseUrl="http://$TSDB_Server_IP:$TSDB_Server_PORT"
+    else
+        #influxdb安装检查
+        docker_influxdb_checkAndInstall
+        InfluxdbBaseUrl="http://$TSDB_DOCKER_IP:8086"
+    fi
+    if [[ "$RUN_GRAFANA" == "true" ]]; then
+        #grafana安装检查
+        docker_grafana_checkAndInstall
+    fi
+
     #webrtc安装检查
     docker_webrtc_checAndInstall
 }
@@ -437,11 +519,20 @@ function update_nginx()
 {
     val1=`echo "$2"| sed 's:\/:\\\/:g'`
     val2=`echo "$3"| sed 's:\/:\\\/:g'`
+    val3=`echo "$4"| sed 's:\/:\\\/:g'`
+    val4=`echo "$5"| sed 's:\/:\\\/:g'`
+    val5=`echo "$6"| sed 's:\/:\\\/:g'`
     echo "正在修改nginx配置文件:$1,on_play:$2,on_play_done:$3"
     sed -i "s/on_play .*/on_play $val1/g" $1
     sed -i "s/on_play_done .*/on_play_done $val2/g" $1
+    sed -i "s/listen 4443 ssl;/listen $val3 ssl;/g" $1
+    sed -i "s/server wss1002;/server $val4;/g" $1
+    sed -i "s/server wss1003;/server $val5;/g" $1
     unset val1
     unset val2
+    unset val3
+    unset val4
+    unset val5
 }
 function update_cluster_conf()
 {
@@ -472,8 +563,8 @@ function update_config(){
     #DOCKER_GATEWAY_HOST=` docker inspect --format '{{ .NetworkSettings.Gateway }}' $MYSQL_DOCKER_CONTAINER_NAME`
     echo "docker 内部可通过 $DOCKER_GATEWAY_HOST访问宿主"
     let "PORT_DEV_START=PORT_DEV_START+(DOCKER_RUN_ID-1)*30"
-	let "DOCKER_RTVS_IP=9+DOCKER_RUN_ID*2"
-	let "DOCKER_RTMP_IP=10+DOCKER_RUN_ID*2"
+    let "DOCKER_RTVS_IP=9+DOCKER_RUN_ID*2"
+    let "DOCKER_RTMP_IP=10+DOCKER_RUN_ID*2"
     get_free_port
     DOCKER_HTTP_PORT=$PORT_DEV_START
     let "PORT_DEV_START++"
@@ -491,6 +582,10 @@ function update_config(){
     let "PORT_DEV_START++"
     
     get_free_port
+    DOCKER_WSS_PORT=$PORT_DEV_START
+    let "PORT_DEV_START++"    
+    
+    get_free_port
     DOCKER_GOV_PORT=$PORT_DEV_START
     let "PORT_DEV_START++"
     
@@ -506,86 +601,111 @@ function update_config(){
     DOCKER_FMP4_PORT=$PORT_DEV_START
     let "PORT_DEV_START++"
     
+    if  [ $PORT_DEV_BINDPORT_START -gt 0 ] ;then
+        DOCKER_DEV_PORT1=$PORT_DEV_BINDPORT_START
+        DOCKER_DEV_PORT2=$(expr $PORT_DEV_BINDPORT_START + 1)
+        DOCKER_DEV_PORT3=$(expr $PORT_DEV_BINDPORT_START + 2)
+        DOCKER_DEV_PORT4=$(expr $PORT_DEV_BINDPORT_START + 3)
+        DOCKER_DEV_PORT5=$(expr $PORT_DEV_BINDPORT_START + 4)
+        DOCKER_DEV_PORT6=$(expr $PORT_DEV_BINDPORT_START + 5)
+        DOCKER_DEV_PORT7=$(expr $PORT_DEV_BINDPORT_START + 6)
+        DOCKER_DEV_PORT8=$(expr $PORT_DEV_BINDPORT_START + 7)
+        DOCKER_DEV_PORT9=$(expr $PORT_DEV_BINDPORT_START + 8)
+        DOCKER_DEV_PORT10=$(expr $PORT_DEV_BINDPORT_START + 9)
+        
+        DOCKER_DEV_PORT11=$(expr $PORT_DEV_BINDPORT_START + 10 )
+        DOCKER_DEV_PORT12=$(expr $PORT_DEV_BINDPORT_START + 11 )
+        DOCKER_DEV_PORT13=$(expr $PORT_DEV_BINDPORT_START + 12 )
+        DOCKER_DEV_PORT14=$(expr $PORT_DEV_BINDPORT_START + 13 )
+        DOCKER_DEV_PORT15=$(expr $PORT_DEV_BINDPORT_START + 14 )
+        DOCKER_DEV_PORT16=$(expr $PORT_DEV_BINDPORT_START + 15 )
+        DOCKER_DEV_PORT17=$(expr $PORT_DEV_BINDPORT_START + 16 )
+        DOCKER_DEV_PORT18=$(expr $PORT_DEV_BINDPORT_START + 17 )
+        DOCKER_DEV_PORT19=$(expr $PORT_DEV_BINDPORT_START + 18 )
+        DOCKER_DEV_PORT20=$(expr $PORT_DEV_BINDPORT_START + 19 )
+        
+    else    
     
-    get_free_port
-    DOCKER_DEV_PORT1=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT1=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT2=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT2=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT3=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT3=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT4=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT4=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT5=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT5=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT6=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT6=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT7=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT7=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT8=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT8=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT9=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT9=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT10=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT10=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT11=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT11=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT12=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT12=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT13=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT13=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT14=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT14=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT15=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT15=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT16=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT16=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT17=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT17=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT18=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT18=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT19=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT19=$PORT_DEV_START
+        let "PORT_DEV_START++"
     
-    get_free_port
-    DOCKER_DEV_PORT20=$PORT_DEV_START
-    let "PORT_DEV_START++"
+        get_free_port
+        DOCKER_DEV_PORT20=$PORT_DEV_START
+        let "PORT_DEV_START++"
+    fi
     
     
     echo "http端口:$DOCKER_HTTP_PORT"
@@ -650,16 +770,22 @@ function update_config(){
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml MappingPort $DOCKER_DEV_PORT20 19719
     
     
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml IsTestMode true
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml IsTestMode false
     
     #Rtmp地址修改
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml RtmpUrl "rtmp://$DOCKER_NETWORK_IPS.$DOCKER_RTMP_IP/mytv/"
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml RtmpUrlPull "rtmp://$IPADDRESS:$DOCKER_RTMP_PORT/mytv/"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml RtmpUrlPull "rtmp://$BeianAddress:$DOCKER_RTMP_PORT/mytv/"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml HlsUrlPull "http://$BeianAddress:$DOCKER_RTMP_STATE_PORT/hls/"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml HlsUrlPullHttps "https://$BeianAddress:$DOCKER_WSS_PORT/hls/"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml LocIP "$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml LocPort "80"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WssPort "$DOCKER_WSS_PORT"
     
     #Webrtc地址
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCUrl "$WEBRTC_RTP_URL"
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCIP "$IPADDRESS"
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCPort "$Webrtc_Port_Start"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCIP "$BeianAddress"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCSslPort "$Webrtc_Port_Start"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCPort "$((Webrtc_Port_Start+1))"
     
     #
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml FDTCPPort $DOCKER_OCX_PORT
@@ -669,21 +795,35 @@ function update_config(){
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml VideoCachePath "/VideoCache/"
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml IPAddress $IPADDRESS
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml BeianAddress $BeianAddress
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml FDWebIP http://$DOCKER_GATEWAY_HOST
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml FDWebPort $DOCKER_HTTP_PORT
 
 
     #修改nginx-rtmp配置
-    update_nginx $DOCKER_NGINX_PATH/nginx.conf "http://$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP/WebService/NginxOnPlay;" "http://$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP/WebService/NginxOnPlayDown;" 
+    update_nginx $DOCKER_NGINX_PATH/nginx.conf "http://$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP/WebService/NginxOnPlay;" "http://$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP/WebService/NginxOnPlayDown;" "$DOCKER_WSS_PORT" "$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP:$DOCKER_WS_PORT"  "$DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP:$DOCKER_FMP4_PORT" 
+    
     
     #修改InfluxdbBaseUrl配置
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml InfluxdbBaseUrl "http://$TSDB_DOCKER_IP:8086"
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml MysqlConnectionString "Database=filecache;Data Source=$MYSQL_DOCKER_IP;port=3306;User Id=rtvsweb;Password=rtvs2018;charset=utf8;pooling=true"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml InfluxdbBaseUrl "$InfluxdbBaseUrl"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml MysqlConnectionString "$MysqlConnectionString"
     
     #修改版本
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml Ver $DOCKER_RTVSWEB_VERSION
     
+    #证书
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml X509FileName "/MyData/certificate.pfx"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml X509Password "$CV_PXF_PWD"
+    
     #修改传入参数
+    if  [ ! -n "$GovWebIp" ] ;then
+        updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml GovWebIp $BeianAddress
+    else
+        updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml GovWebIp $GovWebIp
+    fi
+    if  [ ! -n "$FDWebIP" ] ;then
+        updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml FDWebIP http://$DOCKER_GATEWAY_HOST
+    else
+        updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml FDWebIP http://$FDWebIP
+    fi
     if  [ ! -n "$VideoControlUrl" ] ;then
         echo "VideoControlUrl无需修改"
     else
@@ -705,19 +845,19 @@ function update_config(){
         updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml GrafanaDashboardUrl $GrafanaDashboardUrl
     fi
     if  [ ! -n "$ClusterServer" ] ;then
-        update_cluster_conf $DOCKER_RTVSWEB_PATH/Config/ClusterServer.json "http://$DOCKER_GATEWAY_HOST:30888"
+        update_cluster_conf $DOCKER_RTVSWEB_PATH/Config/ClusterServer.json "http://$DOCKER_GATEWAY_HOST:30888/Api"
     else
         update_cluster_conf $DOCKER_RTVSWEB_PATH/Config/ClusterServer.json $ClusterServer
     fi
-	
-	
+    
+    
     if  [ ! -n "$WebUsrName" ] ;then
         echo "WebUsrName无需修改"
     else
         updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebUsrName $WebUsrName
     fi
-	
-	
+    
+    
     if  [ ! -n "$WebUsrPwd" ] ;then
         echo "WebUsrPwd无需修改"
     else
@@ -730,19 +870,22 @@ function docker_run(){
     docker run -d \
     -p $DOCKER_RTMP_PORT:1935 \
     -p $DOCKER_RTMP_STATE_PORT:8080 \
+    -p $DOCKER_WSS_PORT:$DOCKER_WSS_PORT \
     -v $DOCKER_NGINX_PATH/nginx.conf:/opt/nginx/conf/nginx.conf \
+    -v $DOCKER_NGINX_PATH/cert:/opt/nginx/conf/cert \
     --name $DOCKER_NGINX_CONTAINER_NAME \
-	--net $DOCKER_NETWORK \
-	--ip $DOCKER_NETWORK_IPS.$DOCKER_RTMP_IP\
-    --restart on-failure:5  \
+    --net $DOCKER_NETWORK \
+    --ip $DOCKER_NETWORK_IPS.$DOCKER_RTMP_IP\
+    --restart on-failure  \
     jasonrivers/nginx-rtmp
     
+    docker pull $RTVSWEB_DOCKER_IMAGE_NAME:$DOCKER_RTVSWEB_VERSION
     #启动RTVS
     docker run  \
     --name $DOCKER_RTVSWEB_CONTAINER_NAME \
-	--net $DOCKER_NETWORK \
-	--ip $DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP\
-    --restart on-failure:5  \
+    --net $DOCKER_NETWORK \
+    --ip $DOCKER_NETWORK_IPS.$DOCKER_RTVS_IP\
+    --restart on-failure  \
     --privileged=true  \
     -v $DOCKER_RTVSWEB_PATH:/MyData \
     -v /etc/service/rtvsvideocache:/VideoCache \
@@ -773,7 +916,7 @@ function docker_run(){
     -p $DOCKER_DEV_PORT18:$DOCKER_DEV_PORT18 \
     -p $DOCKER_DEV_PORT19:$DOCKER_DEV_PORT19 \
     -p $DOCKER_DEV_PORT20:$DOCKER_DEV_PORT20 \
-    -d $DOCKER_IMAGE_NAME:$DOCKER_RTVSWEB_VERSION
+    -d $RTVSWEB_DOCKER_IMAGE_NAME:$DOCKER_RTVSWEB_VERSION
 }
 function main(){
     #安装基础docker镜像
@@ -802,9 +945,11 @@ function main(){
     #启动镜像
     docker_run
     
+    echo "RTVS启动完成"
+    echo ""
 }
 function helpinfo(){
-	echo "help 待完善"
+    echo "help 待完善"
 }
 ###################################脚本入口#######################################
 
@@ -820,10 +965,10 @@ elif [ ! -n "$RedisExchangeHosts" ] ; then
     echo "必须传入RedisExchangeHosts"
     helpinfo
 else
-	if [ ! -n "$BeianAddress" ] ; then
-		echo "未传入备案域名，默认为IPADDRESS值$IPADDRESS"
-		BeianAddress=$IPADDRESS
-	fi
+    if [ ! -n "$BeianAddress" ] ; then
+        echo "未传入备案域名，默认为IPADDRESS值$IPADDRESS"
+        BeianAddress=$IPADDRESS
+    fi
     main 
 fi
 

@@ -90,6 +90,10 @@
   <PublishRtmp>true</PublishRtmp>
   <RtmpUrl>rtmp://172.29.108.12/mytv/</RtmpUrl>
   <RtmpUrlPull>rtmp://1.1.1.1:9602/mytv/</RtmpUrlPull>
+  <HlsUrlPull>http://127.0.0.1/mytv/</HlsUrlPull>
+  <HlsUrlPullHttps>https://127.0.0.1/mytv/</HlsUrlPullHttps>
+  <LocIP>127.0.0.1</LocIP>
+  <LocPort>80</LocPort>
   <VideoCachePath>/VideoCache/</VideoCachePath>
   <IsSendOnlyIFrameDuring8Fasterplay>false</IsSendOnlyIFrameDuring8Fasterplay>
   <IsWriteCache>false</IsWriteCache>
@@ -97,21 +101,23 @@
   <IsTestMode>false</IsTestMode>
   <IsDisableCluster>false</IsDisableCluster>
   <StartFD>true</StartFD>
-  <FDMaxCount>300</FDMaxCount>
+  <FDMaxCount>65535</FDMaxCount>
   <FDTCPPort>9605</FDTCPPort>
   <FDUDPPort>18000</FDUDPPort>
   <FDWebSocketPort>9606</FDWebSocketPort>
   <FDFMP4Port>9607</FDFMP4Port>
+  <WssPort>9608</WssPort>
   <FDWebIP>http://172.29.108.1</FDWebIP>
   <FDWebPort>9600</FDWebPort>
   <IPAddress>1.1.1.1</IPAddress>
   <BeianAddress>1.1.1.1</BeianAddress>
   <GovWebIp>+</GovWebIp>
   <GovPort>9604</GovPort>
-  <Ver>1.0.0</Ver>
+  <Ver>1.2.12</Ver>
   <WebRTCUrl>rtp://172.29.108.240</WebRTCUrl>
   <WebRTCIP>1.1.1.1</WebRTCIP>
-  <WebRTCPort>14001</WebRTCPort>
+  <WebRTCPort>4080</WebRTCPort>
+  <WebRTCSslPort>4443</WebRTCSslPort>
   <Chk1078TimeInterval>5000</Chk1078TimeInterval>
   <ChkFDTimeInterval>5000</ChkFDTimeInterval>
   <CloseTimeOutSocket>true</CloseTimeOutSocket>
@@ -135,4 +141,6 @@
   <IsSendPlayRealControlMsgToGW>true</IsSendPlayRealControlMsgToGW>
   <IsWriteLog>true</IsWriteLog>
   <MaxTestSec>600</MaxTestSec>
+  <X509FileName></X509FileName>
+  <X509Password></X509Password>
 </ConfigModel>

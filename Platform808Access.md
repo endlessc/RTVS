@@ -1,18 +1,28 @@
 # RTVS与808平台对接说明
 视频平台(以下简称RTVS)只负责与设备的音视频流通信，并不支持808通道接入，808通道需要808网关支持，RTVS与808网关通过以下方式进行通信。
-## 通过http接口交换的数据
+
+
+|  功能   | 必须实现  |可能用到|
+|  ----  | ----  | ----  |
+| 实时视频  | [808指令](#808指令) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)|
+| 历史视频  |  [808指令](#808指令)<br>[录像列表应答](#录像列表应答) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)<br>[设备音视频属性](#设备音视频属性)|
+| 对讲  |  [808指令](#808指令) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)<br>[设备音视频属性](#设备音视频属性)|
+| 上级平台请求音视频  |  [时效口令](#时效口令) <br>[政府平台音音视频请求](#政府平台音音视频请求)<br>实时视频需实现接口<br>历史视频需实现接口||
+
+
+## 通过http接口交换的数据(RTVS请求)
 * [808指令](#808指令)
 * [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)
-* [根据车牌和车牌颜色获取手机号](#根据车牌和车牌颜色获取手机号)
+* [根据车牌和车牌颜色获取手机号(已过时)](#根据车牌和车牌颜色获取手机号)
 
 ### 808指令
 RTVS会按照以下规则通过Get请求发送0x9101、0x9201、0x9202、0x9205等1078规定走808通道指令，需要网关实现以下HTTP接口。
 
     [配置的网关HTTP接口地址]VideoControl?Content=808协议16进制字符串&IsSuperiorPlatformSend=是否是上级平台发送
 
-    例1:http://127.0.0.1:8888/WebService/VideoControl?Content=9101001401377788321025C20C31302E31302E31302E3233304CF40000010001&IsSuperiorPlatformSend=true
+    例1:http://127.0.0.1:8888/VideoControl?Content=9101001401377788321025C20C31302E31302E31302E3233304CF40000010001&IsSuperiorPlatformSend=true
 
-    例2:http://127.0.0.1:8888/WebService/VideoControl?Content=920200090112464004260003030500200820172042
+    例2:http://127.0.0.1:8888/VideoControl?Content=920200090112464004260003030500200820172042
 
 接口参数：
 
@@ -25,16 +35,16 @@ RTVS会按照以下规则通过Get请求发送0x9101、0x9201、0x9202、0x9205�
 
 |  消息ID   | 类型 | 返回数据  |
 |  ----  | ----  | ----  |
-| 0x9206   |String| "0"：车辆不在线<br> "-1"：失败<br> 其他：应答流水号 |
-| 0x9201,0x9205 |String|  "0"：车辆不在线<br>  "-1"：失败<br> 其他：指令ID(redis接口中[录像列表应答](#录像列表应答)会用到此ID) | 
-| 其他  |String|"0"：车辆不在线<br> "-1"：失败<br>  "1"：成功（仅指将指令成功发送到网关） | 
+| 0x9206   |String| 0：车辆不在线<br> -1：失败<br> 其他：应答流水号(下发9206指令的流水号) |
+| 0x9201,0x9205 |String|  0：车辆不在线<br>  -1：失败<br> 其他：指令ID(redis接口中[录像列表应答](#录像列表应答)会用到此ID) | 
+| 其他  |String|0：车辆不在线<br> -1：失败<br>  1：成功（仅指将指令成功发送到网关） | 
 
 ### 0x9105实时音视频传输状态通知
 RTVS会按照以下规则通过Post请求批量发送0x9105通知，需要网关实现以下HTTP接口。
 
     [配置的网关HTTP接口地址]WCF0x9105?Content=命令帧信息
 
-    例如:http://127.0.0.1:8888/WebService/WCF0x9105?Content=[{"Sim":"013777883221","NotifyList":[{"Channel":1,"PacketLossRate":0},{"Channel":2,"PacketLossRate":10}]},{"Sim":"013777883210","NotifyList":[{"Channel":1,"PacketLossRate":0}]}]
+    例如:http://127.0.0.1:8888/WCF0x9105?Content=[{"Sim":"013777883221","NotifyList":[{"Channel":1,"PacketLossRate":0},{"Channel":2,"PacketLossRate":10}]},{"Sim":"013777883210","NotifyList":[{"Channel":1,"PacketLossRate":0}]}]
 
 
 接口参数：
@@ -94,13 +104,15 @@ RTVS会按照以下规则通过Post请求批量发送0x9105通知，需要网关
 
 
 ### 根据车牌和车牌颜色获取手机号
+
+#### 可不实现此接口，已与上级平台Redis相关接口整合。
+
 RTVS响应上级平台时，需要拿车牌和车牌颜色换取手机号，需要网关实现以下HTTP接口。
 
-TODO：未来考虑取消此接口，与上级平台Redis相关接口整合。
 
     [配置的网关HTTP接口地址]GetVehicleSim?PlateCode=[车牌号码]=&PlateColor=[车牌颜色]
 
-    例如:http://127.0.0.1:8888/WebService/GetVehicleSim?PlateCode=京A12345=&PlateColor=2
+    例如:http://127.0.0.1:8888/GetVehicleSim?PlateCode=京A12345=&PlateColor=2
 
 
 接口参数：
@@ -112,7 +124,7 @@ TODO：未来考虑取消此接口，与上级平台Redis相关接口整合。
 
 返回要求：
 
-    类型String，值 Sim卡号，如果不存在返回 null或空字符串。
+    类型String，值 手机号，如果不存在返回 null或空字符串。
  
     
 
@@ -136,6 +148,7 @@ TODO：未来考虑取消此接口，与上级平台Redis相关接口整合。
 | 数据类型  | Hash |
 | Key  | AVParameters:[手机号] |
 | 值  | [JTRTAVParametersUpload](#JTRTAVParametersUpload)  |
+| TTL  | -1  |
 
 #### JTRTAVParametersUpload
 ```
@@ -197,6 +210,29 @@ TODO：未来考虑取消此接口，与上级平台Redis相关接口整合。
     }
 ```
 
+#### 实例
+```bash
+127.0.0.1:6379> HGETALL   AVParameters:013777883241
+ 1) "AudioChannels"
+ 2) "1"
+ 3) "AudioMaxChannels"
+ 4) "8"
+ 5) "AudioCodeType"
+ 6) "6"
+ 7) "AudioFrameLength"
+ 8) "320"
+ 9) "AudioOut"
+10) "0"
+11) "AudioSamplingDigit"
+12) "1"
+13) "AudioSamplingRate"
+14) "0"
+15) "VideoCodeType"
+16) "98"
+17) "VideoMaxChannels"
+18) "8"
+```
+
 ### 录像列表应答
 RTVS向808平台发送查询录像列表指令后，808平台收到设备应答后，应当将应答结果按下面格式写入redis。
 
@@ -204,7 +240,8 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
 |  ----  | ----  |
 | 数据类型  | String |
 | Key  | OCX_ORDERINFO_[发起指令时HTTP接口返回的指令ID] |
-| 值  | [VideoOrderAck](#VideoOrderAck) 的JSON ,其中Data为[JTVideoListInfo](#JTVideoListInfo) 的JSON,如果指令失败将Data置为null|
+| 值  | [VideoOrderAck](#VideoOrderAck) 的JSON ,如果指令失败将VideoList置为null|
+| TTL  | 建议为5分钟，即300  |
 
 #### VideoOrderAck
 ```
@@ -219,15 +256,36 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
         public int Status { get; set; }
 
         /// <summary>
-        /// 返回数据
+        /// 录像列表
         /// </summary>
-        public string Data { get; set; }
+        public JTVideoListInfo VideoList { get; set; }
 
         /// <summary>
         /// 错误消息
         /// </summary>
         public string ErrMessage { get; set; }
     }
+```
+#### VideoOrderAck.java
+```
+public class VideoOrderAck {
+    /**
+     * 返回值状态:0(初始)，1（成功）,2（设备不在线），3（失败），4（等待回应超时），5（等待回应中），6（作废）
+     */
+    public int Status;
+
+    /**
+     * 录像列表
+     */
+    public JTVideoListInfo VideoList;
+
+    /**
+     * 错误消息
+     */
+    public String ErrMessage;
+
+    // 已省略getset方法
+}
 ```
 
 
@@ -271,12 +329,12 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
         [DataMember]
         public byte Channel { get; set; }
         /// <summary>
-        /// 开始时间（YY-MM-DD-HH-MM-SS，0表示无起始时间条件）
+        /// 开始时间（yyyy-MM-dd HH:mm:ss）
         /// </summary>
         [DataMember]
         public DateTime StartTime { get; set; }
         /// <summary>
-        /// 结束时间（YY-MM-DD-HH-MM-SS，0表示无终止时间条件）
+        /// 结束时间（yyyy-MM-dd HH:mm:ss）
         /// </summary>
         [DataMember]
         public DateTime EndTime { get; set; }
@@ -308,6 +366,70 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
 
     }
 ```
+#### JTVideoListInfo.java 和 JTVideoFileListItem.java
+```
+public class JTVideoListInfo {
+    /**
+     * 流水号（对应查询音视频资源列表指令的流水号）
+     */
+    public int SerialNumber ;
+    /**
+     * 音视频资源总数（无符合条件的音视频资源，置为0）
+     */
+    public int FileCount ;
+    /**
+     * 音视频资源列表（见表23）
+     */
+    public List<JTVideoFileListItem> FileList ;
+
+    // 已省略getset方法
+}
+
+public class JTVideoFileListItem {
+    /**
+     * 逻辑通道号（0表示所有通道）
+     */
+    public byte Channel ;
+
+    /**
+     * 开始时间（yyyy-MM-dd HH:mm:ss）
+     */
+    public String StartTime ;
+    /**
+     * 结束时间（yyyy-MM-dd HH:mm:ss）
+     */
+    public String EndTime ;
+    /**
+     * 报警标志（bit0~bit31见JT/T 808-2011表18报警标志位定义；bit32~bit64见表13；全0表示无报警类型条件）
+     */
+    public long Alarm ;
+    /**
+     * 音视频资源类型（0：音视频，1：音频，2：视频，3：视频或音视频）
+     */
+    public byte MediaType ;
+    /**
+     * 码流类型（0：所有码流，1：主码流，2：子码流）
+     */
+    public byte StreamType ;
+    /**
+     * 存储器类型（0：所有存储器，1：主存储器，2：灾备存储器）
+     */
+    public int StorageType ;
+    /**
+     * 文件大小（单字节BYTE）
+     */
+    public long FileSize ;
+
+    // 已省略getset方法
+}
+```
+
+
+#### 实例
+```bash
+127.0.0.1:6379> GET OCX_ORDERINFO_637469123220860199
+"{\"Status\":1,\"VideoList\":{\"SerialNumber\":140,\"FileCount\":12,\"FileList\":[{\"Channel\":1,\"StartTime\":\"2021-01-22T00:00:00\",\"EndTime\":\"2021-01-22T00:05:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:05:00\",\"EndTime\":\"2021-01-22T00:10:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:10:00\",\"EndTime\":\"2021-01-22T00:15:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:15:00\",\"EndTime\":\"2021-01-22T00:20:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:20:00\",\"EndTime\":\"2021-01-22T00:25:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:25:00\",\"EndTime\":\"2021-01-22T00:30:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:30:00\",\"EndTime\":\"2021-01-22T00:35:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:35:00\",\"EndTime\":\"2021-01-22T00:40:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:40:00\",\"EndTime\":\"2021-01-22T00:45:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:45:00\",\"EndTime\":\"2021-01-22T00:50:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:50:00\",\"EndTime\":\"2021-01-22T00:55:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:55:00\",\"EndTime\":\"2021-01-22T01:00:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812}]},\"ErrMessage\":null}"
+```
 
 ### 磁盘空间配置
 此处按照1077功能要求配置磁盘空间使用规则，需要平台将配置写入redis，RTVS会按照配置的值进行磁盘空间管理。
@@ -317,6 +439,7 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
 | 数据类型  | Hash |
 | Key  | storage_settings |
 | 值  | [JTStorageSettings](#JTStorageSettings) |
+| TTL  | -1  |
 #### JTStorageSettings
 ```
         /// <summary>
@@ -339,6 +462,17 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
         }
 ```
 
+
+#### 实例
+```bash
+127.0.0.1:6379> HGETALL storage_settings
+1) "beyondFlag"
+2) "1"
+3) "alarmThreshold"
+4) "90"
+```
+
+
 ### 磁盘空间不足
 当磁盘空间超过设定上限百分比后，RTVS向Redis发布磁盘空间不足报警，平台需要订阅此消息显示报警。
 
@@ -356,11 +490,20 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
 | 类型  | String |
 | Key  | AUTHORIZE_CODE_1 或 AUTHORIZE_CODE_2 |
 | 值  | String |
+| TTL  | -1  |
 
 
 AUTHORIZE_CODE_1 为 归属地区政府平台使用的时效口令
 
 AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
+
+#### 实例
+```bash
+127.0.0.1:6379> GET AUTHORIZE_CODE_1
+"aaa"
+127.0.0.1:6379> GET AUTHORIZE_CODE_2
+"bbb"
+```
 
 ### 政府平台音音视频请求
 政府平台音视频请求会先从809链路发送消息，网关返回服务器信息后政府平台才会请求视频流，RTVS收到的请求无法确认是实时还是历史，所以需要网关将其他信息写入redis中，格式如下：
@@ -372,6 +515,7 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
 | 类型  | String |
 | Key  | [车牌号码].[车牌颜色].[逻辑通道号].[音视频标志]|
 | 值  |real@[[JTSDownRealVideoRequest](#JTSDownRealVideoRequest) 的JSON]  |
+| TTL  | 建议为5分钟，即300  |
 
 ##### JTSDownRealVideoRequest
 ```
@@ -380,18 +524,25 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
     /// DOWN_REALVIDEO_MSG_STARTUP
     /// （0x9801）
     /// </summary>
-    [DataContract]
     public class JTSDownRealVideoRequest
     {
         /// <summary>
         /// 音视频类型
         /// 0x00:音视频；0x01:音频；0x02:视频
         /// </summary>
-        [DataMember]
         public byte AvitemType { get; set; }
+        /// <summary>
+        /// 手机号 如有不再调用http请求换取SIM接口
+        /// </summary>
+        public string Sim { get; set; }
     }
 ```
 
+#### 实例
+```bash
+127.0.0.1:6379> GET 皖A12341.1.1.0
+"real@{AvitemType:0,Sim:\"111111111111\"}"
+```
 
 #### 政府平台音历史音视频请求
 |  类别   | 值  |
@@ -399,6 +550,7 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
 | 类型  | String |
 | Key  | [车牌号码].[车牌颜色].[逻辑通道号].[音视频标志]|
 | 值  |back@[[JTRTDownPlayBackMsgStartUp](#JTRTDownPlayBackMsgStartUp) 的JSON]  |
+| TTL  | 建议为5分钟，即300  |
 ##### JTRTDownPlayBackMsgStartUp
 ```
     /// <summary>
@@ -424,8 +576,23 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
         /// </summary>
         /// <remarks></remarks>
         public UInt64 PLAYBACK_ENDTIME { get; set; }
-
+        /// <summary>
+        /// 手机号 如有不再调用http换取SIM接口
+        /// </summary>
+        public string Sim { get; set; }
+        /// <summary>
+        /// 音视频类型
+        /// 0x00:音视频；0x01:音频；0x02:视频；0x03:视频或音视频
+        /// </summary>
+        public byte AVITEM_TYPE { get; set; }
     }
+```
+
+
+#### 实例
+```bash
+127.0.0.1:6379> GET 皖A12341.1.3.0
+"back@{\"AVITEM_TYPE\":0,\"STREAM_TYPE\":0,\"PLAYBACK_STARTTIME\":1611244800,\"PLAYBACK_ENDTIME\":1611248400,Sim:\"111111111111\"} "
 ```
 
 ### VDT转码MP4并FTP上传
@@ -536,9 +703,10 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 | 类型  | String |
 | Key  | SIM_CONFIG_FOR_RTVS_[手机号] |
 | 值  | [SimLimiteConfig](#SimLimiteConfig) 的JSON|
+| TTL  | -1  |
 ```
     /// <summary>
-    /// 每个设备sim一个配置
+    /// 每个设备手机号一个配置
     /// </summary>
     public class SimLimiteConfig
     {
@@ -645,3 +813,96 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 
     }
 ```
+
+
+## RTVS提供的HTTP接口
+### 网关通过HTTP获取视频GOV服务接口
+网关在收到上级平台音视频请求后，需要应答视频服务器IP和端口，如果RTVS启用集群模式，需要网关通过集群管理API获取一个最佳视频GOV服务地址。
+
+接口地址：
+
+    [集群管理地址]api/GetBest?Type=1005&Tag=[手机号]
+	
+	Tag可传可不传，传Tag会尽量保证同一个设备在一个RTVS上，建议加上。
+
+    例:http://127.0.0.1:30888/api/GetBest?Type=1005&Tag=013300001111
+
+
+返回数据格式如下
+
+
+    [IP地址]:[端口]
+
+    例: 10.10.10.228:6035
+
+### 网关响应上级平台关闭实时音视频接口(0x9802)
+网关在收到上级平台关闭实时音视频请求后，可以不与RTVS交互直接发给设备，但可能造成正在观看的其他客户端也被关闭。
+
+为解决此问题，可以将此指令转发给RTVS来处理关闭。
+
+接口地址：
+
+    [集群管理地址]ProxyTag/[Tag]/1004/WebService/Gov0x9802?VehicleNO=[车牌号]&VehicleColor=[车牌颜色]&ChannelID=[通道号]&AvitemType=[音视频类型]
+	
+	Tag与获取GOV服务地址的Tag保持一致。
+
+    例:http://127.0.0.1:30888/ProxyTag/013300001111/1004/WebService/Gov0x9802?VehicleNO=京A12345&VehicleColor=2&ChannelID=1&AvitemType=0
+
+
+
+接口参数 可查看1078协议中0x9802相关定义：
+
+|  字段   | 说明  |例子|
+|  ----  | ----  | ----  |
+| Tag  | Tag与获取GOV服务地址的Tag保持一致，建议为手机号  |013300001111|
+| VehicleNO  | 车牌号码  |京A12345|
+| VehicleColor  | 车牌颜色  | 2 |
+| ChannelID  | 逻辑通道号 0 表示所有  | 1 |
+| AvitemType  | 音视频类型  0x00:音视频；0x01:音频；0x02:视频  | 0 |
+
+
+
+返回数据格式如下
+
+
+ | 返回值 | 说明  |
+ | ----  | ----  |
+|-1|参数错误 | 
+|0|失败 | 
+|1|成功 | 
+
+
+### 网关响应上级平台远程录像控制接口(0x9A02)
+
+接口地址：
+
+    [集群管理地址]ProxyTag/[Tag]/1004/WebService/Gov0x9A02?VehicleNO=[车牌号]&VehicleColor=[车牌颜色]&ControlType=[控制类型]&FastTime=[倍数]&DateTime=[拖动位置]
+	
+	Tag与获取GOV服务地址的Tag保持一致。
+
+    例:http://127.0.0.1:30888/ProxyTag/013300001111/1004/WebService/Gov0x9A02?VehicleNO=京A12345&VehicleColor=2&ControlType=5&FastTime=0&DateTime=1606905169
+
+
+
+接口参数 可查看1078协议中0x9A02相关定义：
+
+|  字段   | 说明  |例子|
+|  ----  | ----  | ----  |
+| Tag  | Tag与获取GOV服务地址的Tag保持一致，建议为手机号  |013300001111|
+| VehicleNO  | 车牌号码  |京A12345|
+| VehicleColor  | 车牌颜色  | 2 |
+| ControlType  | 回放类型<br> 0x00:正常回放,0x01:暂停回放,0x02:结束回放,0x03:快进回放,0x04:关键帧快退回放,0x05:拖动回放,0x06:关键帧播放  | 5 |
+| FastTime  | 快进或快退倍数 回放类型为0x3或0x4时有效<br> 0x00:无效,0x01:1倍,0x02:2倍,0x03:4倍,0x04:8倍,0x05:16倍  | 0 |
+| DateTime  | 拖动位置，用UTC时间表示，回放控制为0x05时，此字段内容有效    | 1606905169 |
+
+
+
+返回数据格式如下
+
+
+ | 返回值 | 说明  |
+ | ----  | ----  |
+|-1|参数错误 | 
+|0|失败 | 
+|1|成功 | 
+

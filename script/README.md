@@ -1,8 +1,11 @@
 # 启动脚本
-以下在Centos7下测试通过，其他环境可能需要修改docker_network.sh脚本，主要需解决docker容器访问宿主机"No route to host"问题。
+
+[阿里云部署例子](https://blog.csdn.net/vanjoge/article/details/108319078)
+
+以下在Centos7和Ubuntu20.04下测试通过，其他环境可能需要修改docker_network.sh脚本，主要需解决docker容器访问宿主机"No route to host"问题。
 
 需支持lsof命令
-1. 添加docker自定义网络172.29.108.X网段(仅首次需要)
+1. 添加docker自定义网络172.29.108.X网段(**仅首次需要**)
 
 注意：执行此脚本会重启docker服务，如有还有其他docker服务在运行请谨慎操作。
 ```
@@ -15,11 +18,11 @@ sudo ./docker_network.sh
 #DOCKER_WEBSOCKET_PORT 设备连接端口 默认17000
 #export DOCKER_WEBSOCKET_PORT=17000
 
-#H5对讲必须HTTPS  集群管理需要pxf证书
-#CV_PXF_PATH pxf证书路径
-#export CV_PXF_PATH=/XXX/certificate.pfx
-#CV_PXF_PWD pxf证书密码
-#export CV_PXF_PWD=XXXX
+#H5对讲必须HTTPS  集群管理需要pfx证书
+#CV_PFX_PATH pfx证书路径
+#export CV_PFX_PATH=/XXX/certificate.pfx
+#CV_PFX_PWD pfx证书密码
+#export CV_PFX_PWD=XXXX
 
 sudo -E ./run_cluster.sh
 ```
@@ -38,12 +41,12 @@ sudo -E ./run_gw.sh
 
 4. 启动rtvs
 ``` bash
-#H5对讲必须HTTPS 需要pxf和pem证书
+#H5对讲必须HTTPS 需要pfx和pem证书
 
-#CV_PXF_PATH pxf证书路径 一般为*.pfx
-#export CV_PXF_PATH=/XXX/certificate.pfx
-#CV_PXF_PWD pxf证书密码
-#export CV_PXF_PWD=XXXX
+#CV_PFX_PATH pfx证书路径 一般为*.pfx
+#export CV_PFX_PATH=/XXX/certificate.pfx
+#CV_PFX_PWD pfx证书密码
+#export CV_PFX_PWD=XXXX
 
 #CV_PEM_PATH pem证书路径 一般为*.crt或*.pem
 #export CV_PEM_PATH=/XXX/certificate.crt
@@ -71,8 +74,8 @@ sudo -E ./run_rtvs.sh
 |  端口   | 类型  |说明|
 |  ----  | ----  | ----  |
 | 17000  | TCP  | 集群管理 |
-| 6001-6100  | TCP  | RTVS |
-| 14001-14200  | TCP+UDP  |  |
+| 6001-6030  | TCP  | RTVS |
+| 14001-14034  | TCP+UDP  | Webrtc端口(不用webrtc可不映射,具体端口数数量为CPU核心数+2) |
 | 9300  | TCP  |(可选)测试网关808协议接入端口 |
   
 

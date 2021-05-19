@@ -1,13 +1,18 @@
 # RTVS与808平台对接说明
 视频平台(以下简称RTVS)只负责与设备的音视频流通信，并不支持808通道接入，808通道需要808网关支持，RTVS与808网关通过以下方式进行通信。
 
+RTVS自带的测试808网关已开源，可参考对应实现，地址：
+
+[https://github.com/vanjoge/JT808GW](https://github.com/vanjoge/JT808GW)
+
+[https://gitee.com/vanjoge/JT808GW](https://gitee.com/vanjoge/JT808GW)
 
 |  功能   | 必须实现  |可能用到|
 |  ----  | ----  | ----  |
 | 实时视频  | [808指令](#808指令) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)|
 | 历史视频  |  [808指令](#808指令)<br>[录像列表应答](#录像列表应答) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)<br>[设备音视频属性](#设备音视频属性)|
 | 对讲  |  [808指令](#808指令) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)<br>[设备音视频属性](#设备音视频属性)|
-| 上级平台请求音视频  |  [时效口令](#时效口令) <br>[政府平台音音视频请求](#政府平台音音视频请求)<br>实时视频需实现接口<br>历史视频需实现接口||
+| 上级平台请求音视频  |  [时效口令](#时效口令) <br>[政府平台音音视频请求](#政府平台音音视频请求)<br>实时视频需实现接口<br>历史视频需实现接口|[网关通过HTTP获取视频GOV服务接口](#网关通过HTTP获取视频GOV服务接口) <br>[网关响应上级平台关闭实时音视频接口0x9802](#网关响应上级平台关闭实时音视频接口0x9802) <br>[网关响应上级平台远程录像控制接口0x9A02](#网关响应上级平台远程录像控制接口0x9A02)|
 
 
 ## 通过http接口交换的数据(RTVS请求)
@@ -38,6 +43,12 @@ RTVS会按照以下规则通过Get请求发送0x9101、0x9201、0x9202、0x9205�
 | 0x9206   |String| 0：车辆不在线<br> -1：失败<br> 其他：应答流水号(下发9206指令的流水号) |
 | 0x9201,0x9205 |String|  0：车辆不在线<br>  -1：失败<br> 其他：指令ID(redis接口中[录像列表应答](#录像列表应答)会用到此ID) | 
 | 其他  |String|0：车辆不在线<br> -1：失败<br>  1：成功（仅指将指令成功发送到网关） | 
+
+
+#### 实时/历史流程示意图
+![gw](vsd/img/9101.png)
+#### 网关接入处理逻辑
+![gw](vsd/img/gw.png)
 
 ### 0x9105实时音视频传输状态通知
 RTVS会按照以下规则通过Post请求批量发送0x9105通知，需要网关实现以下HTTP接口。
@@ -234,6 +245,7 @@ RTVS响应上级平台时，需要拿车牌和车牌颜色换取手机号，需�
 ```
 
 ### 录像列表应答
+
 RTVS向808平台发送查询录像列表指令后，808平台收到设备应答后，应当将应答结果按下面格式写入redis。
 
 |  类别   | 值  |
@@ -242,6 +254,7 @@ RTVS向808平台发送查询录像列表指令后，808平台收到设备应答�
 | Key  | OCX_ORDERINFO_[发起指令时HTTP接口返回的指令ID] |
 | 值  | [VideoOrderAck](#VideoOrderAck) 的JSON ,如果指令失败将VideoList置为null|
 | TTL  | 建议为5分钟，即300  |
+
 
 #### VideoOrderAck
 ```
@@ -431,6 +444,11 @@ public class JTVideoFileListItem {
 "{\"Status\":1,\"VideoList\":{\"SerialNumber\":140,\"FileCount\":12,\"FileList\":[{\"Channel\":1,\"StartTime\":\"2021-01-22T00:00:00\",\"EndTime\":\"2021-01-22T00:05:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:05:00\",\"EndTime\":\"2021-01-22T00:10:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:10:00\",\"EndTime\":\"2021-01-22T00:15:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:15:00\",\"EndTime\":\"2021-01-22T00:20:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:20:00\",\"EndTime\":\"2021-01-22T00:25:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:25:00\",\"EndTime\":\"2021-01-22T00:30:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:30:00\",\"EndTime\":\"2021-01-22T00:35:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:35:00\",\"EndTime\":\"2021-01-22T00:40:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:40:00\",\"EndTime\":\"2021-01-22T00:45:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:45:00\",\"EndTime\":\"2021-01-22T00:50:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:50:00\",\"EndTime\":\"2021-01-22T00:55:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812},{\"Channel\":1,\"StartTime\":\"2021-01-22T00:55:00\",\"EndTime\":\"2021-01-22T01:00:00\",\"Alarm\":0,\"MediaType\":0,\"StreamType\":0,\"StorageType\":1,\"FileSize\":4938812}]},\"ErrMessage\":null}"
 ```
 
+
+#### 9205流程示意图
+![gw](vsd/img/9205.png)
+
+
 ### 磁盘空间配置
 此处按照1077功能要求配置磁盘空间使用规则，需要平台将配置写入redis，RTVS会按照配置的值进行磁盘空间管理。
 
@@ -594,6 +612,10 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
 127.0.0.1:6379> GET 皖A12341.1.3.0
 "back@{\"AVITEM_TYPE\":0,\"STREAM_TYPE\":0,\"PLAYBACK_STARTTIME\":1611244800,\"PLAYBACK_ENDTIME\":1611248400,Sim:\"111111111111\"} "
 ```
+
+
+#### 流程图
+![gov](vsd/img/gov.png)
 
 ### VDT转码MP4并FTP上传
 服务端视频缓存格式为VDT，RTVS支持将VDT格式文件转码成MP4并上传到指定FTP服务器。(与设备录像FTP上传逻辑一致)
@@ -835,7 +857,7 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 
     例: 10.10.10.228:6035
 
-### 网关响应上级平台关闭实时音视频接口(0x9802)
+### 网关响应上级平台关闭实时音视频接口0x9802
 网关在收到上级平台关闭实时音视频请求后，可以不与RTVS交互直接发给设备，但可能造成正在观看的其他客户端也被关闭。
 
 为解决此问题，可以将此指令转发给RTVS来处理关闭。
@@ -872,7 +894,7 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 |1|成功 | 
 
 
-### 网关响应上级平台远程录像控制接口(0x9A02)
+### 网关响应上级平台远程录像控制接口0x9A02
 
 接口地址：
 

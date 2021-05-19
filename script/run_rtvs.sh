@@ -40,8 +40,10 @@ DOCKER_GATEWAY_HOST=${DOCKER_GATEWAY_HOST:-"172.29.108.1"}
 
 
 #证书
-CV_PXF_PATH=${CV_PXF_PATH:-""}
-CV_PXF_PWD=${CV_PXF_PWD:-""}
+CV_PFX_PATH=${CV_PFX_PATH:-$CV_PXF_PATH}
+CV_PFX_PWD=${CV_PFX_PWD:-$CV_PXF_PWD}
+CV_PFX_PATH=${CV_PFX_PATH:-""}
+CV_PFX_PWD=${CV_PFX_PWD:-""}
 CV_PEM_PATH=${CV_PEM_PATH:-""}
 CV_PEMKEY_PATH=${CV_PEMKEY_PATH:-""}
 
@@ -51,7 +53,7 @@ CV_PEMKEY_PATH=${CV_PEMKEY_PATH:-""}
 PORT_DEV_START=${PORT_DEV_START:-6001}
 PORT_DEV_END=${PORT_DEV_END:-65535}
 Webrtc_Port_Start=${Webrtc_Port_Start:-14001}
-Webrtc_Port_End=${Webrtc_Port_End:-14200}
+Webrtc_Port_End=${Webrtc_Port_End:-65535}
 PORT_DEV_BINDPORT_START=${PORT_DEV_BINDPORT_START:-0}
 
 ClusterServer=${ClusterServer:-"http://172.29.108.254/Api"}
@@ -70,7 +72,7 @@ DOCKER_RTVSWEB_CONTAINER_NAME=$RTVSWEB_DOCKER_CONTAINER_NAME_TEMPLATE"1"
 DOCKER_RTVSWEB_PATH=$RTVSWEB_DOCKER_PATH_TEMPLATE"1"
 DOCKER_NGINX_PATH=$NGINX_DOCKER_PATH_TEMPLATE"1"
 DOCKER_NGINX_CONTAINER_NAME=$NGINX_DOCKER_CONTAINER_NAME_TEMPLATE"1";
-DOCKER_RTVSWEB_VERSION="1.2.12"
+DOCKER_RTVSWEB_VERSION="1.3.0"
 
 DOCKER_RTVS_IP=11
 DOCKER_RTMP_IP=12
@@ -230,12 +232,12 @@ function init_system_files_path()
     fi
     
     # 复制证书
-    if [ -n "$CV_PXF_PATH" ]; then
-        if [[ -f "$CV_PXF_PATH" ]]; then
-            echo "拷贝证书文件： $CV_PXF_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx"
-            cp -f $CV_PXF_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx
+    if [ -n "$CV_PFX_PATH" ]; then
+        if [[ -f "$CV_PFX_PATH" ]]; then
+            echo "拷贝证书文件： $CV_PFX_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx"
+            cp -f $CV_PFX_PATH $DOCKER_RTVSWEB_PATH/certificate.pfx
         else
-            echo "缺少$CV_PXF_PATH文件...已退出安装!"
+            echo "缺少$CV_PFX_PATH文件...已退出安装!"
             exit 1
         fi
     else
@@ -782,6 +784,7 @@ function update_config(){
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WssPort "$DOCKER_WSS_PORT"
     
     #Webrtc地址
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCApi "http://$WEBRTC_DOCKER_IP:88"
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCUrl "$WEBRTC_RTP_URL"
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCIP "$BeianAddress"
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml WebRTCSslPort "$Webrtc_Port_Start"
@@ -811,7 +814,7 @@ function update_config(){
     
     #证书
     updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml X509FileName "/MyData/certificate.pfx"
-    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml X509Password "$CV_PXF_PWD"
+    updateXml $DOCKER_RTVSWEB_PATH/SettingConfig.xml X509Password "$CV_PFX_PWD"
     
     #修改传入参数
     if  [ ! -n "$GovWebIp" ] ;then

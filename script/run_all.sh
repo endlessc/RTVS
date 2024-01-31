@@ -10,22 +10,49 @@ export PORT_DEV_END=65535
 #webrtc连接端口范围(此范围找CPU核心数+2个端口)
 export Webrtc_Port_Start=14001
 export Webrtc_Port_End=65535
-#808测试网关连接端口
-export DOCKER_808_PORT=9300
-
+#RTSP服务端口
+export DOCKER_RTSP_PORT_RANGE_UDP="14100-14200"
+#是否启用SwaggerUI，某些安全扫描对SwaggerUI有报警，可在此禁用
+export SwaggerUI=true
 
 #设置服务器IP地址或域名(内网测试无需映射端口 外网请映射端口)
 #此配置是RTVS下发给设备的连接地址和客户端连接服务器的地址，请注意公网时的端口映射
 export IPADDRESS=(Your IP or domain)
-#设置网关接口地址
+#设置默认网关接口地址
 export GatewayBaseAPI=http://172.29.108.249/api/
-#设置redis连接字符串
-export RedisExchangeHosts=172.29.108.245:6379,connectTimeout=20000,syncTimeout=20000,responseTimeout=20000
+#设置默认GB网关接口地址
+export GB28181API=http://172.29.108.247/api/RTVS/
+#设置TagConfs 此参数支持按前端传入的CTags区分网关接口地址
+#export TagConfs="<Item><Tag>test</Tag><GatewayBaseAPI>http://172.29.108.249/api/</GatewayBaseAPI><GB28181API>http://172.29.108.247/api/RTVS/</GB28181API></Item> <Item><Tag>publish</Tag><GatewayBaseAPI>http://172.29.108.249/api/</GatewayBaseAPI><GB28181API>http://172.29.108.247/api/RTVS/</GB28181API></Item>"
+#设置redis连接字符串(默认的测试网关未支持RedisExchangeHosts参数，如果使用默认网关请不要更改此参数)
+export RedisExchangeHosts=172.29.108.245:6379,connectTimeout=20000,syncTimeout=20000,responseTimeout=20000,defaultDatabase=0,password=
+
+#以下为host模式需要修改的配置
+#export RTVS_NETWORK_HOST=true
+#export GatewayBaseAPI=http://127.0.0.1:9080/api/
+#export GB28181API=http://127.0.0.1:9081/api/RTVS/
 
 
+if [[ ! -f "./run_cluster.sh" ]]; then
+    cd RTVS/script
+fi
+
+source default_args.sh
+#拉取完所有镜像再更新，减少更新等待时间
+./pull_all.sh
+#因为前面已经拉过镜像了，设置不检查更新加快启动速度
+export RTVS_UPDATECHECK_DOCKER=false
+
+./clear.sh 2>/dev/null
 
 ./run_cluster.sh
 
+./run_28181.sh
+
+#启动默认测试网关+redis服务
 ./run_gw.sh
+
+#启动主动安全附件服务
+./run_attachment.sh
 
 ./run_rtvs.sh

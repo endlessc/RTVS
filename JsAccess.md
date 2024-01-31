@@ -22,7 +22,19 @@
             * [发送云台雨刷控制指令](#发送云台雨刷控制指令)
             * [发送云台红外补光控制指令](#发送云台红外补光控制指令)
             * [发送云台变倍控制指令](#发送云台变倍控制指令)
+            * [Gov播放](#Gov播放)
          * [其他](#其他)
+            * [截图](#截图)
+            * [刷新](#刷新)
+            * [暂停](#暂停)
+            * [恢复播放](#恢复播放)
+            * [获取音量](#获取音量)
+            * [设置音量](#设置音量)
+            * [全屏](#全屏)
+            * [开始录像](#开始录像)
+            * [停止录像](#停止录像)
+            * [设置视频宽高比](#设置视频宽高比)
+            * [设置播放速度](#设置播放速度)
             * [视频旋转](#视频旋转)
             * [视频镜面反转](#视频镜面反转)
             * [整体全屏](#整体全屏)
@@ -53,9 +65,9 @@ JS视频播放插件
 ### 初始化和分屏
 #### 初始化控件
 ----
-   接口
+   接口 返回UCMain对象，与静态方法具有同名接口。用以支持一个页面初始化多个视频控件。
 ```
-CvNetVideo.Init(dom, VideoNums = 4, config = {});
+Init(dom, VideoNums = 4, config = {});
 
 ```
    参数说明
@@ -67,6 +79,8 @@ defaultConfig = {
                 //以下只可初始化传入 后期不可改
                 //与dom参数一致 
                 media: null,
+                //初始化分屏数量 此处可调整分屏最大数量 建议够用就行 设过大可能影响页面性能
+                MaxUcNum: 16,
                 //视频显示宽度
                 videoWidth: 352,
                 //视频显示高度
@@ -138,15 +152,51 @@ defaultConfig = {
                     onHlsPlay: null,
                     //对讲开始 与设备链路建立完成，且可开始对讲时触发
                     //参数 无
-                    onStartSpeek: null
+                    onStartSpeek: null,
+                    //客户端获取麦克风错误，一般多见于无麦克风强行开启对讲的场景
+                    //参数 Error
+                    onMicError: null,
+                    //时间戳播放回调
+                    //参数1 id 表示第几个分屏 从1开始
+                    //参数2 timestamp 时间戳
+                    onTimeStamp:null,
+                    //分屏双击回调，
+                    //参数1 id 表示第几个分屏 从1开始
+                    //参数2 UCVideo对象
+                    //返回值 true表示取消双击放大
+                    onUcDbclick: null,
+                    //流量统计回调，
+                    //参数1 KBps 数值，建议toFixed(2)后再显示
+                    //参数2 id 表示第几个分屏 从1开始
+                    //参数3 UCVideo对象
+                    onKBpsChange: null,
+                    //本地录像完成回调，
+                    //参数1 录像Blob
+                    //参数2 录像信息 { type, sim, channel, startTime, stopTime}
+                    //参数3 id 表示第几个分屏 从1开始
+                    //参数4 UCVideo对象
+                    //返回值 true表示取消自动下载
+                    onEndRecord: null,
                 },
                 //初始化完成通知
                 callback: null,
+                //gov授权码，未授权版本仅允许播放一路视频，且30秒自动断开。
+                govmd5: "",
+                govnum: 100,
+                //开始传输以后，gov多少毫秒未收到数据关闭URL
+                govTimeoutMsec: 5000,
 
 
                 //以下参数可调用方法时修改
 
-
+                //token类型 0:不启用 1:一次有效随机码，需先通过后端接口申请 2:RSA加密当前时间戳
+                tokenType: 0,
+                //token
+                token: null,
+                //选中时取消分屏静音
+                unmuteBySelected: true,
+                //选中分屏zindex
+                selectedZIndex: 999,
                 //启用双击放大单窗口
                 enableDbcZoom: true,
                 //0 自动 1 WASM软解(canvas+audioAPI) 2 js封装FMP4(h264Demuxer+audioAPI) 3 WASM封装FMP4(WASM2FMP4) 4 服务器推fmp4流 5 webrtc 6 hls 7 webrtc(srs)
@@ -190,6 +240,25 @@ defaultConfig = {
                 captureQuality: null,
                 //流畅模式，开播会缓存够一定时间buff，保证播放流畅性，但延迟稍高 fmp4模式有效
                 smoothMode: false,
+                //协议版本 0 808-2013 1 808-2019 2 GB28181
+                protocol: 0,
+                //默认ctags
+                defaultCtags: null,
+                //录像起播缓存(ms)
+                playbackStartCache: 2000
+                //添加菜单
+                /*addMenu:[
+                    { title: "567", onClicked: function (index) { console.log("clicked 567-" + index) } },
+                    { title: "123", onClicked: function (index) { console.log("clicked 123-" + index) } },
+                ],*/
+
+                //添加按钮 需在class中指定按钮图标和位置
+                /*addButtons:[
+                    { title: "add1", class: "addbuton-1", onClicked: function (index) { console.log("addbuton-1-" + index) } },
+                    { title: "add1", class: "addbuton-2", onClicked: function (index) { console.log("addbuton-2-" + index) } },
+                ],*/
+                //是否使用cdn
+                isUseCdn: false,
             };
 ```
    示例
@@ -201,8 +270,9 @@ window.onload = function () {
             init();
 
         };
+        var uc1;
         function init() {
-            CvNetVideo.Init(document.querySelector("#player"), 4,
+            uc1 = CvNetVideo.Init(document.querySelector("#player"), 4,
                 {
                     remoteHost: "127.0.0.1",
                     playerMode: 4,
@@ -229,11 +299,11 @@ callback:分屏计算回调
 ```
      示例
 ```
-   CvNetVideo.CustomScreens("3X2", functi.on(width, height) {
+   uc1.CustomScreens("3X2", function(width, height) {
             width = parseInt((width - 4) / 3);
             height = parseInt((height - 4) / 2);
-            for (var i = 1; i <= 16; i++) {
-                var video_div = CvNetVideo.Videos[i].GetVideoDiv();
+            uc1.VideosforEach(function (video, i) {
+                var video_div = video.GetVideoDiv();
                 if (i > 6) {
                     //超过分屏数量隐藏掉
                     video_div.style.display = "none";
@@ -247,11 +317,11 @@ callback:分屏计算回调
                     video_div.style.top = top + "px";
                     video_div.style.width = (width - 4) + "px";
                     video_div.style.height = (height - 4) + "px";
-                    CvNetVideo.Videos[i].Resize();
+                    video.Resize();
                 }
-            }
+            });
         });
-   CvNetVideo.LayoutByScreens("3X2");
+   uc1.LayoutByScreens("3X2");
 ```
 
 #### 设置分屏数量
@@ -483,6 +553,21 @@ StopSpeak()
  CvNetVideo.StopSpeak();
 ```
 
+#### 对讲音量设置
+     接口
+```
+SetSpeekVolume(value)
+
+```
+   参数说明
+```
+value:音量大小 0.0-10.0 1.0是指原始音量大小，10.0是指音量放大10倍。
+```
+     示例
+```
+ CvNetVideo.SetSpeekVolume(1);
+```
+
 #### 发送FTP视频上传指令
 
      接口
@@ -560,10 +645,10 @@ UploadControl：上传控制（0：暂停，1：继续，2：取消）
      接口
 ```
 // 根据索引关闭窗口 0代表当前选中窗口
-CvNetVideo.Stop(id);//id>=0
+Stop(id);//id>=0
 
 // 关闭所有窗口
-CvNetVideo.Stop(-1);
+Stop(-1);
 ```
 
 
@@ -632,12 +717,236 @@ TimesControl(Sim, Channel, Flag, videoId = 0, config = {});
 Flag:0:调大 1调小
 ```
 
+#### Gov播放
+     接口
+```
+GovPlay(url, videoId = 0, config = {}, Callback = null);
+
+```
+   参数说明
+```
+url: JT/T 1078-2016 6.2中规定的URL
+videoId:哪一个分屏，0代表当前选中分屏 
+config:配置项 可更改init中传入config值
+Callback:错误回调 function (status, reason) 
+	-1, "URL请求发生错误"
+	-2, "URL请求失败"
+	-101, "超过允许最大连接数，断开连接"
+	-102, "超过允许播放时长，断开连接。"
+```
+
+示例
+```js
+CvNetVideo.GovPlay(
+                "http://et.test.cvtsp.com:15007/沪QQ7771.1.1.0.aaa",
+                id, null,
+                //gov实时流请求回调，status < 0 请求失败，reason 原因
+                function (status, reason) {
+                    if (status < 0) {
+                        console.log("失败:" + reason);
+                        if (status == -1) {
+                            alert("URL请求发生错误，请检查URL是否能访问，或是否通过HTTPS页面访问了HTTP地址。");
+                        } else {
+                            alert(reason);
+                        }
+                    }
+                },
+            );
+```
+
+#### 下载历史视频文件
+     接口
+```
+DownLoadVideo(Sim, Channel, MediaType, StreamType = 0, StorageType = 0, PlaybackMode = 0, Multiple = 0, StartTime, EndTime, config = {}, DataSource = 0, Speed = 4, VideoFormat = 0) ;
+
+```
+   参数说明
+```
+Sim:sim卡号
+Channel:通道号不支持0
+MediaType：音视频资源类型（0：音视频，1：音频，2：视频，3：视频或音视频）
+StreamType：码流类型（0：主码流或子码流，1：主码流，2：子码流）
+StorageType：存储器类型（0：主存储器或灾备存储器，1：主存储器，2：灾备存储器）
+PlaybackMode:回放模式（0：正常回放，1：快进回放，2：关键帧快退回放，3：关键帧播放，4：单帧上传）
+Multiple:倍速（0：无效，1：1倍，2：2倍，3：4倍，4：8倍，5：16倍）
+StartTime:开始时间
+EndTime:结束时间
+config:配置项 与Init一致
+DataSource:0自动 1设备 2服务端缓存
+Speed:下载倍速，仅28181有效
+VideoFormat:文件格式（0：FMP4格式，1：FLV格式）
+```
+
+
+#### 下载FMP4文件
+     接口
+```
+DownLoadFmp4(Sim, Channel, MediaType, StreamType = 0, StorageType = 0, PlaybackMode = 0, Multiple = 0, StartTime, EndTime, config = {}, DataSource = 0, Speed = 4) ;
+
+```
+   参数说明
+```
+Sim:sim卡号
+Channel:通道号不支持0
+MediaType：音视频资源类型（0：音视频，1：音频，2：视频，3：视频或音视频）
+StreamType：码流类型（0：主码流或子码流，1：主码流，2：子码流）
+StorageType：存储器类型（0：主存储器或灾备存储器，1：主存储器，2：灾备存储器）
+PlaybackMode:回放模式（0：正常回放，1：快进回放，2：关键帧快退回放，3：关键帧播放，4：单帧上传）
+Multiple:倍速（0：无效，1：1倍，2：2倍，3：4倍，4：8倍，5：16倍）
+StartTime:开始时间
+EndTime:结束时间
+config:配置项 与Init一致
+DataSource:0自动 1设备 2服务端缓存
+Speed:下载倍速，仅28181有效
+```
+
+
 ### 其他
+#### 截图
+     接口
+```
+// 截图
+Capture(filename, captureType, captureQuality, videoId = 0);
+
+```
+   参数说明
+```
+filename:为null时不下载生成文件
+captureType:截图图片类型 0 png, 1 jpeg, 2 webp; 为null时取config.captureType
+captureQuality:截图图片质量 0-1 jpeg和webp时有效; 为null时取config.captureQuality
+videoId:0为选中窗口，其它为窗口索引号从1开始
+return:截图图片base64编码
+```
+#### 刷新
+     接口
+```
+// 刷新(跳到最新画面播放)
+Refreash(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 暂停
+     接口
+```
+// 暂停
+Pause(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 恢复播放
+     接口
+```
+// 恢复播放
+Resume(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 获取音量
+     接口
+```
+// 获取音量
+GetVolume(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+return:0-100，100最大
+```
+
+#### 设置音量
+     接口
+```
+// 设置音量
+SetVolume(videoId, volume);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+volume:0-100，100最大
+```
+
+#### 全屏
+     接口
+```
+// 设置分屏全屏
+SetFull(videoId, is_full);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+is_full:true 全屏 false 取消全屏
+```
+
+#### 开始录像
+     接口
+```
+// 开始录像
+StartRecord(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 停止录像
+     接口
+```
+// 停止录像
+StopRecord(videoId = 0);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 设置视频宽高比
+     接口
+```
+// 设置视频宽高比，WASM和Codec模式暂未支持
+SetAdaptRatio(videoId , is_adapt);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+is_adapt:true 保持视频宽高比;false 铺满分屏
+```
+
+#### 设置播放速度
+     接口
+```
+// 设置播放速度
+SetPlaySpeed(videoId , speed);
+
+```
+   参数说明
+```
+videoId:0为选中窗口，其它为窗口索引号从1开始
+speed:必须大于0，1为正常倍速，支持小数
+```
+
 #### 视频旋转
      接口
 ```
 // 根据索引关闭窗口 0代表当前选中窗口
-CvNetVideo.SetRotate(id, angle);//id>=0
+SetRotate(id, angle);//id>=0
 
 ```
    参数说明
@@ -651,7 +960,7 @@ return:true为调用成功，false为调用失败
      接口
 ```
 // 初始化为正常状态，之后调用一次反转一次
-CvNetVideo.SetMirrorInver(id);//id>=0
+SetMirrorInver(id);//id>=0
 
 ```
    参数说明
@@ -664,15 +973,36 @@ return:true为调用成功，false为调用失败
      接口
 ```
 // 保持分屏整体全屏 
-CvNetVideo.FullScreen()
+FullScreen()
 
 ```
+
+#### 放大单个分屏
+     接口
+```
+// 将单个分屏铺满整个控件 同双击分屏事件
+ZoomUC(videoId)
+
+```
+   参数说明
+```
+videoId:-1为所有窗口，0为选中窗口，其它为窗口索引号从1开始
+```
+
+#### 恢复分屏
+     接口
+```
+// 恢复显示所有分屏 
+UnZoomUC()
+
+```
+
 
 #### 重新设置大小
      接口
 ```
 // 重新设置播放控件整体所占用大小
-CvNetVideo.Resize(width, height)
+Resize(width, height)
 
 ```
    参数说明
@@ -686,7 +1016,7 @@ height:高度
      接口
 ```
 // 初始化为正常状态，之后调用一次反转一次
-CvNetVideo.SetMirrorInver(id);//id>=0
+SetMirrorInver(id);//id>=0
 
 ```
    参数说明
@@ -699,7 +1029,7 @@ return:true为调用成功，false为调用失败
      接口
 ```
 // 设置所有分屏osd是否显示
-CvNetVideo.SetOsdVisible(visible, videoId);
+SetOsdVisible(visible, videoId);
 
 ```
    参数说明
@@ -712,7 +1042,7 @@ videoId:-1为所有窗口，0为选中窗口，其它为窗口索引号从1开�
      接口
 ```
 // 设置所有分屏osd文本颜色
-CvNetVideo.SetOsdColor(color, videoId);
+SetOsdColor(color, videoId);
 
 ```
    参数说明
@@ -724,7 +1054,7 @@ videoId:-1为所有窗口，0为选中窗口，其它为窗口索引号从1开�
      接口
 ```
 // 设置所有分屏osd文本颜色
-CvNetVideo.SetOsdText(videoId, text);
+SetOsdText(videoId, text);
 
 ```
    参数说明
@@ -737,7 +1067,7 @@ text: 文本内如
      接口
 ```
 // 分屏是否正在播放(只要开启不管有无画面均认为在播放，手动暂停此状态还是true)
-CvNetVideo.IsPlaying(videoId);
+IsPlaying(videoId);
 
 ```
    参数说明
@@ -750,7 +1080,7 @@ return: true 播放中 false 未播放
      接口
 ```
 // 设置超时时间
-CvNetVideo.SetTimeoutMsec(timeoutCloseMsec, timeoutWarningMsec);
+SetTimeoutMsec(timeoutCloseMsec, timeoutWarningMsec);
 
 ```
    参数说明
@@ -762,7 +1092,7 @@ timeoutWarningMsec: 超时前警告提醒时间
      接口
 ```
 // 设置优先级
-CvNetVideo.SetPriority(priority, videoId = 0);
+SetPriority(priority, videoId = 0);
 
 ```
    参数说明
@@ -771,17 +1101,30 @@ priority: 优先级0-100 越大优先级越高
 videoId:0为选中窗口，其它为窗口索引号从1开始
 ```
 
-### 属性
+### UCMain包含属性
 #### Videos
 ```
 // 获取内部分屏对象 即内部UCVideo对象，一个分屏就是一个UCVideo
-CvNetVideo.Videos[id]
+Videos[id]
 
 ```
    参数说明
 ```
 id:索引号从1开始
 return:UCVideo对象
+```
+
+#### NowSelectVideo
+```
+// 当前选中分屏id
+
+```
+
+
+#### NowPlayVideosCount
+```
+// 当前播放中的分屏数量
+
 ```
 
 

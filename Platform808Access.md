@@ -14,6 +14,7 @@ RTVS自带的测试808网关已开源，可参考对应实现，地址：
 | 对讲  |  [808指令](#808指令) | [0x9105实时音视频传输状态通知](#0x9105实时音视频传输状态通知)<br>[设备音视频属性](#设备音视频属性)|
 | 上级平台请求音视频  |  [时效口令](#时效口令) <br>[政府平台音音视频请求](#政府平台音音视频请求)<br>实时视频需实现接口<br>历史视频需实现接口|[网关通过HTTP获取视频GOV服务接口](#网关通过HTTP获取视频GOV服务接口) <br>[网关响应上级平台关闭实时音视频接口0x9802](#网关响应上级平台关闭实时音视频接口0x9802) <br>[网关响应上级平台远程录像控制接口0x9A02](#网关响应上级平台远程录像控制接口0x9A02)|
 
+## 注意:以下[手机号]均为字符串，如果不足12位(808-2019时为20位)需前补0
 
 ## 通过http接口交换的数据(RTVS请求)
 * [808指令](#808指令)
@@ -23,18 +24,32 @@ RTVS自带的测试808网关已开源，可参考对应实现，地址：
 ### 808指令
 RTVS会按照以下规则通过Get请求发送0x9101、0x9201、0x9202、0x9205等1078规定走808通道指令，需要网关实现以下HTTP接口。
 
-    [配置的网关HTTP接口地址]VideoControl?Content=808协议16进制字符串&IsSuperiorPlatformSend=是否是上级平台发送
+`此接口支持验证，如果配置了APIAuthorization参数，会自动在http头中加入"authorization"，值为APIAuthorization配置的值。
+
+`
+
+
+    [配置的网关HTTP接口地址]VideoControl?Content=808协议16进制字符串&IsSuperiorPlatformSend=是否是上级平台发送&CTags=可由前端传入的自定义内容
 
     例1:http://127.0.0.1:8888/VideoControl?Content=9101001401377788321025C20C31302E31302E31302E3233304CF40000010001&IsSuperiorPlatformSend=true
 
-    例2:http://127.0.0.1:8888/VideoControl?Content=920200090112464004260003030500200820172042
+    例2:http://127.0.0.1:8888/VideoControl?Content=920200090112464004260003030500200820172042&CTags=ccc11aa
 
 接口参数：
-
-|  字段   | 说明  |例子|
+       
+|  字段   | 说明  |例(确定指令能下发后就应答，不用等设备应答再回复。)|
 |  ----  | ----  | ----  |
 | Content  | 808协议16进制字符串(包头+包体)<br>包头不含7E、未转义、<b>流水号需要808平台替换</b>  | 9101001401377788321025C20C31302E31302E31302E3233304CF40000010001|
 | IsSuperiorPlatformSend  | 是否是上级平台发送，网关可用此字段确定是否由上级平台发起。<br>一般为true才会包含此字段，为false时此字段不传 | true|
+| ChSub  | 当前通道实时子码流数量，含本次请求 | 1|
+| ChMain  | 当前通道实时主码流数量，含本次请求 | 0|
+| ChBack  | 当前通道历史流数量，含本次请求 | 0|
+| ChTalk  | 当前通道对讲流数量，含本次请求 | 0|
+| Sub  | 当前SIM下所有通道实时子码流数量，含本次请求 | 1|
+| Main  | 当前SIM下所有通道实时主码流数量，含本次请求 | 0|
+| Back  | 当前SIM下所有通道历史流数量，含本次请求 | 0|
+| Talk  | 当前SIM下所有通道对讲流数量，含本次请求 | 0|
+
 
 返回要求，类型String 值如下表：
 
@@ -553,6 +568,10 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
         /// 手机号 如有不再调用http请求换取SIM接口
         /// </summary>
         public string Sim { get; set; }
+        /// <summary>
+        /// CTags 可用于区分调用不通网关API地址
+        /// </summary>
+        public string CTags { get; set; }
     }
 ```
 
@@ -585,12 +604,12 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
         /// <remarks></remarks>
         public byte STREAM_TYPE { get; set; }
         /// <summary>
-        /// 回放起始时间   UTC时间
+        /// 回放起始时间   UTC时间(秒)
         /// </summary>
         /// <remarks></remarks>
         public UInt64 PLAYBACK_STARTTIME { get; set; }
         /// <summary>
-        /// 回放结束时间   UTC时间
+        /// 回放结束时间   UTC时间(秒)
         /// </summary>
         /// <remarks></remarks>
         public UInt64 PLAYBACK_ENDTIME { get; set; }
@@ -603,6 +622,10 @@ AUTHORIZE_CODE_2 为 跨域地区政府平台使用的时效口令
         /// 0x00:音视频；0x01:音频；0x02:视频；0x03:视频或音视频
         /// </summary>
         public byte AVITEM_TYPE { get; set; }
+        /// <summary>
+        /// CTags 可用于区分调用不通网关API地址
+        /// </summary>
+        public string CTags { get; set; }
     }
 ```
 
@@ -777,7 +800,7 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
         /// <summary>
         /// 同一设备对讲监听能不能同时进行
         /// </summary>
-        public bool m_is_taklback_listen_meanwhile;
+        public bool m_is_talkback_listen_meanwhile;
         /// <summary>
         /// 同一通道实时历史能不能同时传
         /// </summary>
@@ -797,14 +820,78 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
         public long m_start_absolute_timestamp;
 
         /// <summary>
-        /// 是否有海思头
+        /// 1.2016版jt1078   2.2014版jt1078
         /// </summary>
-        public bool m_is_audio_have_haisi_header;
-
+        public int m_protocol_type;
         /// <summary>
         /// 是否设备cheji，一个连接就只发一个通道的数据
         /// </summary>
         public static bool m_is_device_connection_single_channel = true;
+        /// <summary>
+        /// b帧处理模式 0自动 1有B帧 2无B帧
+        /// </summary>
+        public int m_b_frame_type;
+        /// <summary>
+        /// 强制编码方式(主码流视频)
+        /// </summary>
+        public JTRTAVCodeType m_force_pt_video_main;
+        /// <summary>
+        /// 强制编码方式(子码流视频)
+        /// </summary>
+        public JTRTAVCodeType m_force_pt_video_sub;
+        /// <summary>
+        /// 强制编码方式(主码流音频)
+        /// </summary>
+        public JTRTAVCodeType m_force_pt_audio_main;
+        /// <summary>
+        /// 强制编码方式(子码流音频)
+        /// </summary>
+        public JTRTAVCodeType m_force_pt_audio_sub;
+        /// <summary>
+        /// 上次编码(主码流视频)
+        /// </summary>
+        public JTRTAVCodeType m_last_pt_video_main;
+        /// <summary>
+        /// 上次编码(主码流音频)
+        /// </summary>
+        public JTRTAVCodeType m_last_pt_audio_main;
+        /// <summary>
+        /// 音频帧长(主码流)
+        /// </summary>
+        public ushort m_audio_frame_length_main;
+        /// <summary>
+        /// 是否有海思头(主码流)
+        /// </summary>
+        public bool? m_is_audio_have_haisi_header_main;
+        /// <summary>
+        /// 上次编码(子码流视频)
+        /// </summary>
+        public JTRTAVCodeType m_last_pt_video_sub;
+        /// <summary>
+        /// 上次编码(子码流音频)
+        /// </summary>
+        public JTRTAVCodeType m_last_pt_audio_sub;
+        /// <summary>
+        /// 音频帧长(子码流)
+        /// </summary>
+        public ushort m_audio_frame_length_sub;
+        /// <summary>
+        /// 是否有海思头(子码流)
+        /// </summary>
+        public bool? m_is_audio_have_haisi_header_sub;
+        /// <summary>
+        /// 上次编码(对讲)
+        /// </summary>
+        public JTRTAVCodeType m_last_talk_pt;
+        /// <summary>
+        /// 对讲音频帧长
+        /// </summary>
+        public ushort m_talk_frame_length;
+        /// <summary>
+        /// 对讲是否有海思头
+        /// </summary>
+        public bool? m_is_talk_have_haisi_header;
+
 
         /// <summary>
         /// 设置默认配置信息
@@ -824,13 +911,16 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
             config.m_channel_max_connection_talk = 3;
             config.m_channel_max_connection_listen = 3;
 
-            config.m_is_taklback_listen_meanwhile = false;
+            config.m_is_talkback_listen_meanwhile = false;
             config.m_is_channel_real_back_meanwhile = true;
             config.m_is_channel_real_streamtype_meanwhile = true;
 
             config.m_is_absolute_timestamp = false;
-            
-            config.m_is_audio_have_haisi_header = true;
+
+            config.m_protocol_type = 1;
+
+            config.m_b_frame_type = 0;
+
         }
 
     }
@@ -856,6 +946,53 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
     [IP地址]:[端口]
 
     例: 10.10.10.228:6035
+
+### GOV服务获取FMP4 HTTP流(实时)
+
+接口地址：
+
+    http://[GOV服务地址]/[SIM]_[通道]_real.mp4?DataType=[数据类型]&StreamType=[码流类型]&CTags=[CTags]
+
+
+    例:http://10.10.10.228:6035/111111111112_1_real.mp4?DataType=0&StreamType=0&CTags=test
+
+    DataType和StreamType数值定义见1078协议9101
+
+### GOV服务获取FMP4 HTTP流(历史)
+
+接口地址：
+
+    http://[GOV服务地址]/[SIM]_[通道]_[开始UTC时间]_[结束UTC时间].mp4?MediaType=[音视频类型]&StreamType=[码流类型]&PlaybackMode=[回放方式]&Multiple=[倍数]&DataSource=[来源]&CTags=[CTags]
+
+
+    例:http://10.10.10.228:6035/111111111112_1_1651745996_0.mp4?MediaType=0&StreamType=1&PlaybackMode=0&Multiple=1&DataSource=1&CTags=test
+
+
+    MediaType、StreamType、PlaybackMode和Multiple数值定义见1078协议9201，DataSource为来源 0自动 1设备 2服务端缓存
+    
+### GOV服务获取FLV HTTP流(实时)
+
+接口地址：
+
+    http://[GOV服务地址]/[SIM]_[通道]_real.flv?DataType=[数据类型]&StreamType=[码流类型]&CTags=[CTags]
+
+
+    例:http://10.10.10.228:6035/111111111112_1_real.flv?DataType=0&StreamType=0&CTags=test
+
+    DataType和StreamType数值定义见1078协议9101
+
+### GOV服务获取FLV HTTP流(历史)
+
+接口地址：
+
+    http://[GOV服务地址]/[SIM]_[通道]_[开始UTC时间]_[结束UTC时间].flv?MediaType=[音视频类型]&StreamType=[码流类型]&PlaybackMode=[回放方式]&Multiple=[倍数]&DataSource=[来源]&CTags=[CTags]
+
+
+    例:http://10.10.10.228:6035/111111111112_1_1651745996_0.flv?MediaType=0&StreamType=1&PlaybackMode=0&Multiple=1&DataSource=1&CTags=test
+
+
+    MediaType、StreamType、PlaybackMode和Multiple数值定义见1078协议9201，DataSource为来源 0自动 1设备 2服务端缓存
+
 
 ### 网关响应上级平台关闭实时音视频接口0x9802
 网关在收到上级平台关闭实时音视频请求后，可以不与RTVS交互直接发给设备，但可能造成正在观看的其他客户端也被关闭。
@@ -915,7 +1052,7 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 | VehicleColor  | 车牌颜色  | 2 |
 | ControlType  | 回放类型<br> 0x00:正常回放,0x01:暂停回放,0x02:结束回放,0x03:快进回放,0x04:关键帧快退回放,0x05:拖动回放,0x06:关键帧播放  | 5 |
 | FastTime  | 快进或快退倍数 回放类型为0x3或0x4时有效<br> 0x00:无效,0x01:1倍,0x02:2倍,0x03:4倍,0x04:8倍,0x05:16倍  | 0 |
-| DateTime  | 拖动位置，用UTC时间表示，回放控制为0x05时，此字段内容有效    | 1606905169 |
+| DateTime  | 拖动位置，用UTC时间(秒)表示，回放控制为0x05时，此字段内容有效    | 1606905169 |
 
 
 
@@ -927,4 +1064,7 @@ RTVS转码MP4并上传FTP完成后，会通过TranscodeUploadStart指定的方�
 |-1|参数错误 | 
 |0|失败 | 
 |1|成功 | 
+
+
+
 
